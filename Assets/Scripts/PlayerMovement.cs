@@ -16,28 +16,36 @@ public class PlayerMovement : MonoBehaviour
     public float jumpHoldForce = 1.9f;
     public float jumpHoldDuration = 0.1f;
     public float crouchJumpBoost = 2.5f;
+    public float hangingJumpForce = 15f;
 
     float jumpTime;
 
     [Header("状态")]
-    public bool isCrouch;
-    public bool isOnGround;
-    public bool isJump;
-    public bool isHeadBlocked;
+    public bool isCrouch;//下蹲
+    public bool isOnGround;//在地面
+    public bool isJump;//跳起来
+    public bool isHeadBlocked;//头顶阻碍
+    public bool isHanging;//边缘悬挂
 
     [Header("环境检测")]
     public float footOffset = 0.4f;
     public float headClearance = 0.5f;
     public float groundDistance = 0.2f;
+    float playerHeight;//人物头顶高度
+    public float eyeHeight = 1.5f;//眼睛大概高度
+    public float grabDistance = 0.4f;//抓墙的距离
+    public float reachOffset = 0.7f;//判断抓墙的两条射线之间的距离
+
     public LayerMask groundLayer;
 
 
-    float xVelocity;
+    public float xVelocity;
 
     //按键设置
     bool jumpPressed;
     bool jumpHeld;
     bool crouchHeld;
+    bool crouchPressed;
 
     //碰撞体尺寸
     Vector2 colliderStandSize;
@@ -51,6 +59,7 @@ public class PlayerMovement : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         coll = GetComponent<BoxCollider2D>();
 
+        playerHeight = coll.size.y;
         colliderStandSize = coll.size;
         colliderStandOffset = coll.offset;
         colliderCrouchSize = new Vector2(coll.size.x, coll.size.y / 2f);
@@ -60,9 +69,11 @@ public class PlayerMovement : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        //ButtonCheck();
         jumpPressed = Input.GetButtonDown("Jump");
         jumpHeld = Input.GetButton("Jump");
         crouchHeld = Input.GetButton("Crouch");
+        crouchPressed = Input.GetButtonDown("Crouch");
     }
 
     private void FixedUpdate()
@@ -72,8 +83,21 @@ public class PlayerMovement : MonoBehaviour
         MidAirMovement();
     }
 
+    void ButtonCheck()
+    {
+        if (Input.GetButtonDown("Jump"))
+            jumpPressed = true;
+        if (Input.GetButton("Jump"))
+            jumpHeld = true;
+        if (Input.GetButton("Crouch"))
+            crouchHeld = true;
+        if (Input.GetButtonDown("Crouch"))
+            crouchPressed = true;
+    }
+
     void PhysicsCheck()
     {
+        //左右脚射线
         RaycastHit2D leftCheck = Raycast(new Vector2(-footOffset, 0f), Vector2.down, groundDistance, groundLayer);
         RaycastHit2D rightCheck = Raycast(new Vector2(footOffset, 0f), Vector2.down, groundDistance, groundLayer);
 
@@ -82,15 +106,39 @@ public class PlayerMovement : MonoBehaviour
         else
             isOnGround = false;
 
+        //头部射线
         RaycastHit2D headCheck = Raycast(new Vector2(0f, coll.size.y), Vector2.up, headClearance, groundLayer);
         if (headCheck)
             isHeadBlocked = true;
         else
             isHeadBlocked = false;
+
+        float direction = transform.localScale.x;
+        Vector2 grabDir = new Vector2(direction, 0f);//射线方向
+
+        RaycastHit2D blockedCheck = Raycast(new Vector2(footOffset * direction, playerHeight), grabDir, grabDistance, groundLayer);
+        RaycastHit2D wallCheck = Raycast(new Vector2(footOffset * direction, eyeHeight), grabDir, grabDistance, groundLayer);
+        RaycastHit2D ledgeCheck = Raycast(new Vector2(reachOffset * direction, playerHeight), Vector2.down, grabDistance, groundLayer);
+
+        //边缘爬墙
+        if (!isOnGround && rb.velocity.y<0f && ledgeCheck && wallCheck && !blockedCheck)
+        {
+            Vector3 pos = transform.position;
+
+            pos.x += (wallCheck.distance - 0.05f) * direction;
+            pos.y -= ledgeCheck.distance;
+
+            transform.position = pos;
+
+            rb.bodyType = RigidbodyType2D.Static;
+            isHanging = true;
+        }
     }
 
     void GroundMovement()
     {
+        if (isHanging)
+            return;
         if (crouchHeld && !isCrouch && isOnGround)
             Crouch();
         else if (!crouchHeld && isCrouch && !isHeadBlocked)
@@ -108,8 +156,29 @@ public class PlayerMovement : MonoBehaviour
         FilpDirection();
     }
 
+    //跳跃
     void MidAirMovement() {
-        if (jumpPressed && isOnGround && !isJump)
+        //悬挂状态
+        if (isHanging)
+        {
+            if (jumpPressed)
+            {
+                rb.bodyType = RigidbodyType2D.Dynamic;
+                rb.velocity = new Vector2(rb.velocity.x, hangingJumpForce);
+                isHanging = false;
+                //jumpPressed = false;
+            }
+
+            if (crouchPressed)
+            {
+                rb.bodyType = RigidbodyType2D.Dynamic;
+                isHanging = false;
+                //crouchPressed = false;
+            }
+        }
+
+        //地面状态
+        if (jumpPressed && isOnGround && !isJump && !isHeadBlocked )
         {
             if (isCrouch)
             {
@@ -119,6 +188,7 @@ public class PlayerMovement : MonoBehaviour
 
             isOnGround = false;
             isJump = true;
+            //jumpPressed = false;
 
             jumpTime = Time.time + jumpHoldDuration;
 
@@ -130,7 +200,10 @@ public class PlayerMovement : MonoBehaviour
                 rb.AddForce(new Vector2(0f, jumpForce), ForceMode2D.Impulse);
             if (jumpTime < Time.time)
                 isJump = false;
+            //jumpPressed = false;
+            //jumpHeld = false;
         }
+
     }
     
     /*设置翻转*/
@@ -148,7 +221,7 @@ public class PlayerMovement : MonoBehaviour
         isCrouch = true;
         coll.size = colliderCrouchSize;
         coll.offset = colliderCrouchOffset;
-
+        crouchHeld = false;
     }
 
     void StandUp()
