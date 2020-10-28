@@ -69,11 +69,11 @@ public class PlayerMovement : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        //ButtonCheck();
-        jumpPressed = Input.GetButtonDown("Jump");
-        jumpHeld = Input.GetButton("Jump");
-        crouchHeld = Input.GetButton("Crouch");
-        crouchPressed = Input.GetButtonDown("Crouch");
+        ButtonCheck();
+        //jumpPressed = Input.GetButtonDown("Jump");
+        //jumpHeld = Input.GetButton("Jump");
+        //crouchHeld = Input.GetButton("Crouch");
+        //crouchPressed = Input.GetButtonDown("Crouch");
     }
 
     private void FixedUpdate()
@@ -166,14 +166,14 @@ public class PlayerMovement : MonoBehaviour
                 rb.bodyType = RigidbodyType2D.Dynamic;
                 rb.velocity = new Vector2(rb.velocity.x, hangingJumpForce);
                 isHanging = false;
-                //jumpPressed = false;
+                jumpPressed = false;
             }
 
             if (crouchPressed)
             {
                 rb.bodyType = RigidbodyType2D.Dynamic;
                 isHanging = false;
-                //crouchPressed = false;
+                crouchPressed = false;
             }
         }
 
@@ -210,10 +210,10 @@ public class PlayerMovement : MonoBehaviour
     void FilpDirection()
     {
         if (xVelocity < 0)
-            transform.localScale = new Vector2(-1, 1);
+            transform.localScale = new Vector3(-1, 1, 1);
 
         if (xVelocity > 0)
-            transform.localScale = new Vector2(1, 1);
+            transform.localScale = new Vector3(1, 1, 1);
     }
 
     void Crouch()
